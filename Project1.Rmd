@@ -1,0 +1,214 @@
+---
+title: "Analyzing The Leading Causes of Death in the USA"
+author: "GWU Intro to Data Science -- DATS 6101"
+output:
+  html_document:
+    code_folding: show
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+date: "2025-03-19"
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+library(ezids)
+library(dplyr)
+
+```
+
+
+
+```{r setup, include=FALSE}
+# some of common options (and the defaults) are: 
+# include=T, eval=T, echo=T, results='hide'/'asis'/'markup',..., collapse=F, warning=T, message=T, error=T, cache=T, fig.width=6, fig.height=4, fig.dim=c(6,4) #inches, fig.align='left'/'center','right', 
+knitr::opts_chunk$set(warning = F, results = "markup", message = F)
+# knitr::opts_chunk$set(warning = F, results = "hide", message = F)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+
+```
+
+``` {r}
+df <- read.csv("causes-of-death.csv", stringsAsFactors = FALSE)
+df <- df[df$`Cause.Name` != "All causes", ]
+str(df)
+```
+
+# **Abstract**
+
+* Briefly introduce the project and research goals.
+* Summarize key findings from the EDA process.
+* State the main conclusions and their relevance.
+* Keep this concise and engaging for a non-technical re
+
+# **Introduction** 
+
+In a world of public health, observing mortality rates and trends will always present itself as a source of important information. Understanding mortality trends is essential for public health planning, policy-making, and medical advancements. Analyzing the leading causes of death in the United States from 1999 to 2017 provides valuable insights into long-term health patterns, disparities between states, and the effectiveness of public health interventions. 
+
+As time goes on, the mortality rates increase, as well as the age rate for how long people live and therefore die from natural causes. Mortality rates fluctuate due to a combination of medical advancements, policy changes, socio-economic factors, and public health initiatives.For instance, cancer mortality has declined due to improvements in early detection and treatment, while opioid-related deaths have surged due to the opioid epidemic in the 2010s. Similarly, heart disease remains the leading cause of death, but states with strong preventive health policies show lower mortality rates. These are just some notable trends seen in the U.S but with the data from the set we hope to exlplore some of these trends and more.
+
+By analyzing this dataset, our goal is to identify the following:   
+
+* Investigate how leading causes of death have changed over time. Are the mortality rates increasing or decreasing for certain diseases?
+
+* Examine regional disparties and trends. Which states experiences the highest/lowest death rates? 
+
+These insights can help government agencies, healthcare organizations, and policymakers allocate resources more effectively, target high-risk populations, and design evidence-based health interventions to reduce preventable deaths.
+
+To systematically explore the dataset, we formulated SMART Research Questions.
+
+1. How have the leading causes of death changed across different states from 1999 to 2017?
+2. Are there significant variations in mortality rates for specific causes of death between states?
+3. What trends can be observed in specific causes of death (e.g., heart disease, cancer) over time, and how do they correlate with public health intervention
+
+
+# **Data Understanding & Curation**
+
+To complete this analysis, we recieved our data using **Kaggle.com** this website offers plenty of available and ready datasets for many topics. The original content of the information comes from the **Centers for Disease Control and Prevention (CDC)** as well as the **National Center for Health Statistics (NCHS)**. This data was collected using the the death certificates of residents in **all 50 state and Washington, D.C** over the span of 18 years (1999-2017). The variables of this dataset reviews data on the 10 leading causes of death in the United States it includes  **deaths by year, cause of death (ICD-10 standardized classifications), number of deaths per cause of death per state, and lasty the age-adjusted death rates**. In total all 6 variable contribute to 10,869 obseravtions in the dataset.   
+
+This data utilizes **age-adjusted rates** to allow fair comparisons between groups with different age distributions. An age-adjustment involves using a "standard" population distribution to modify death and hospitalization rates. The age-adjusted rates represent what these rates would be if the population being studied had the same age distribution as the standard population. As a result, these rates serve as summary measures that account for variations in age distributions. Age-adjusted death rates (per 100,000 population) are calculated based on the 2000 U.S. standard population.
+
+
+```{r}
+
+# Data Cleaning 
+
+colSums(is.na(df))
+
+df <- na.omit(df)
+
+df$Year <- as.integer(df$Year)
+
+df$State <- as.factor(df$State)
+df$Cause.Name <- as.factor(df$Cause.Name)
+df <- df[!duplicated(df), ]
+
+df <- df[, !names(df) %in% c("X113.Cause.Name")]
+```
+
+
+# **Exploratory Data Analysis**
+
+In doing our research, EDA was conducted to understand mortality trends over time, variations by state, and the impact of specific causes. Firstly, we took the basic EDA to get a reference point for the type of analysis we would be conducting. 
+
+- **Overall Mortality Trends**: We analyzed **total death rates across years** to observe general improvements or deteriorations in public health.
+- **Top 5 Causes of Death**: The most common causes of death were identified per year.
+- **State-Level Analysis**: A comparison of mortality rates across states to highlight geographic health disparities.
+- **Pre/Post-2010 Mortality Analysis**: Investigated how deaths changed over time, particularly after 2010, when opioid-related deaths spiked.
+
+```{r}
+#Summary Statistics
+
+
+group_var = df$Cause.Name
+
+value_var = df$Age.adjusted.Death.Rate
+
+summary_by_group <- function(df, group_var, value_var) {
+  causes <- unique(df[[group_var]])
+  results <- data.frame(
+    Cause = character(),
+    Mean = numeric(),
+    Median = numeric(),
+    SD = numeric(),
+    Min = numeric(),
+    Max = numeric(),
+    stringsAsFactors = FALSE
+  )
+  for (cause in causes) {
+    subset_data <- df[df[[group_var]] == cause, ]
+    values <- subset_data[[value_var]]
+    results <- rbind(results, data.frame(
+      Cause = cause,
+      Mean = mean(values, na.rm = TRUE),
+      Median = median(values, na.rm = TRUE),
+      SD = sd(values, na.rm = TRUE),
+      Min = min(values, na.rm = TRUE),
+      Max = max(values, na.rm = TRUE)
+    ))
+  }
+  return(results)
+}  
+cause_summary <- summary_by_group(df, "Cause.Name", "Age.adjusted.Death.Rate")
+
+# View the results
+print(cause_summary)
+
+
+#Key findings 
+
+```
+
+````{r}
+
+high_low_by_year <- data.frame(
+  Year = integer(),
+  Highest_State = character(),
+  Highest_Cause = character(),
+  Highest_Rate = numeric(),
+  Lowest_State = character(),
+  Lowest_Cause = character(),
+  Lowest_Rate = numeric(),
+  stringsAsFactors = FALSE
+)
+# Loop through each year in the dataset
+for (yr in sort(unique(df$Year))) {
+  
+  # Filter to only that year (and remove "United States" if needed)
+  data_year <- df[df$Year == yr & df$State != "United States", ]
+  
+  # Find row with the highest rate
+  max_row <- data_year[which.max(data_year$`Age.adjusted.Death.Rate`), ]
+  
+  # Find row with the lowest rate
+  min_row <- data_year[which.min(data_year$`Age.adjusted.Death.Rate`), ]
+  
+  # Add to the results table
+  high_low_by_year <- rbind(high_low_by_year, data.frame(
+    Year = yr,
+    Highest_State = max_row$State,
+    Highest_Cause = max_row$`Cause.Name`,
+    Highest_Rate = max_row$`Age.adjusted.Death.Rate`,
+    Lowest_State = min_row$State,
+    Lowest_Cause = min_row$`Cause.Name`,
+    Lowest_Rate = min_row$`Age.adjusted.Death.Rate`
+  ))
+}
+
+print(high_low_by_year)
+
+````
+
+# Statistical Testing & Technical Analysis 
+
+To determine significant trends, we conduct:
+
+- **T-Test:** Comparing pre-2010 vs. post-2010 mortality rates.
+- **ANOVA:** Variability of death rates across states.
+- **Chi-Square Test:** Relationship between state and cause of death.
+
+``{r statistical_tests}
+# T-Test: Did mortality rates significantly change after 2010?
+t_test_result <- t.test(df$Age.adjusted.Death.Rate[df$Year < 2010], 
+                        df$Age.adjusted.Death.Rate[df$Year >= 2010])
+print(t_test_result)
+
+# ANOVA: Do death rates vary significantly across states?
+anova_result <- aov(Age.adjusted.Death.Rate ~ State, df = deaths)
+summary(anova_result)
+
+# Chi-Square Test: Is there an association between state and cause of death?
+chisq_table <- table(deaths_data$state, deaths_data$cause_of_death)
+chisq_result <- chisq.test(chisq_table)
+print(chisq_result)
+```
+
+# Discussion & Insights
+
+
+# References
