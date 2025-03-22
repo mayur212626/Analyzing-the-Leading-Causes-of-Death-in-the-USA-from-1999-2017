@@ -269,12 +269,13 @@ ggplot(plot_states, aes(x = reorder(State, -mean_death_rate), y = mean_death_rat
 - **Southern states like MS, AL, WV show highest rates. Northeastern and Western states have lower rates.**
 - **Southern states have an average 22% higher mortality rate than the national average**, likely due to **higher obesity rates, cardiovascular disease prevalence, and healthcare access disparities**.
 - **Highest Mortality States**
-  Mississippi (159)
-  West Virginia (154)
-  Alabama (153)
+  Mississippi (77)
+  Kentucky (73)
+  Oklahoma (73)
 - **Lowest Mortality States**
-  Hawaii (90)
-  Minnesota (91)
+  Minnesota (50)  
+  Hawaii (47)
+  
 
 
 # **Statistical Testing & Technical Analysis** 
