@@ -1,0 +1,390 @@
+---
+title: "Analyzing The Leading Causes of Death in the USA"
+author: Ashley Gyapomah, Omissy
+output:
+  html_document:
+    code_folding: show
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+date: "2025-03-19"
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+library(ezids)
+library(dplyr)
+library(tidyr)
+library(usmap)
+library(ggplot2)
+```
+
+
+
+```{r setup, include=FALSE}
+# some of common options (and the defaults) are: 
+# include=T, eval=T, echo=T, results='hide'/'asis'/'markup',..., collapse=F, warning=T, message=T, error=T, cache=T, fig.width=6, fig.height=4, fig.dim=c(6,4) #inches, fig.align='left'/'center','right', 
+knitr::opts_chunk$set(warning = F, results = "markup", message = F)
+# knitr::opts_chunk$set(warning = F, results = "hide", message = F)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+
+```
+
+``` {r}
+df <- read.csv("causes-of-death.csv", stringsAsFactors = FALSE)
+df <- df[df$`Cause.Name` != "All causes", ]
+str(df)
+```
+
+# **Abstract**
+
+This project explores the leading causes of death in the United States from 1999 to 2017 using age-adjusted mortality data collected from national death certificates. The goal was to investigate how mortality patterns have changed over time, varied by state, and evolved among major causes such as heart disease, cancer, unintentional injuries, and suicide. Using exploratory data analysis and statistical testing, we addressed three SMART research questions focused on temporal trends, regional disparities, and cause-specific mortality shifts.
+Our findings show a national decline in mortality rates from 1999 to 2010, followed by a modest increase, potentially linked to the rise of the opioid epidemic and behavioral health crises. Geographic analysis revealed significant differences in mortality between states, with the South consistently reporting higher death rates than states like California or Hawaii. Trend analysis across causes revealed a decline in heart disease and cancer, alongside rising rates of unintentional injuries and suicide, particularly after 2010.
+The analysis provides meaningful insight into public health progress and challenges over nearly two decades. While the dataset offered rich national and state-level detail, limitations such as missing demographic variables suggest future research should explore disparities by age, race, and socioeconomic status. Our conclusions underscore the importance of data-driven public health strategies that address both chronic and emerging causes of death through targeted prevention and policy interventions.
+
+
+# **Introduction** 
+
+In a world of public health, observing mortality rates and trends will always present itself as a source of important information. Understanding mortality trends is essential for public health planning, policy-making, and medical advancements. Analyzing the leading causes of death in the United States from 1999 to 2017 provides valuable insights into long-term health patterns, disparities between states, and the effectiveness of public health interventions. 
+
+As time goes on, the mortality rates increase, as well as the age rate for how long people live and, therefore, die from natural causes. Mortality rates fluctuate due to a combination of medical advancements, policy changes, socio-economic factors, and public health initiatives. For instance, cancer mortality has declined due to improvements in early detection and treatment, while opioid-related death hs have surged due to the opioid epidemic in the 2010s. Similarly, heart disease remains the leading cause of death, but states with strong preventive health policies show lower mortality rates. These are just a few of the notable trends observed in the U.S. With our dataset, we aim to explore these patterns further and uncover additional insights.
+
+By analyzing this dataset, our goal is to identify the following:   
+
+* Investigate how leading causes of death have changed over time. Are the mortality rates increasing or decreasing for certain diseases?
+
+* Examine regional disparties and trends. Which states experiences the highest/lowest death rates? 
+
+These insights can help government agencies, healthcare organizations, and policymakers allocate resources more effectively, target high-risk populations, and design evidence-based health interventions to reduce preventable deaths.
+
+### SMART Questions 
+
+To guide our exploration, we developed a set of research questions aligned with the SMART criteria.
+
+1. How have the overall moratlity rate chnaged over time in the U.S?
+2. Are there significant variations in mortality rates for specific causes of death between states?
+3. What trends can be observed in specific causes of death (e.g., heart disease, cancer) over time, and how do they correlate with public health intervention
+
+
+# **Data Understanding & Curation**
+
+To complete this analysis, we recieved our data using **Kaggle.com** this website offers plenty of available and ready datasets for many topics. The original content of the information comes from the **Centers for Disease Control and Prevention (CDC)** as well as the **National Center for Health Statistics (NCHS)**. This data was collected using the the death certificates of residents in **all 50 state and Washington, D.C** over the span of 18 years (1999-2017). The variables of this dataset reviews data on the 10 leading causes of death in the United States it includes  **deaths by year, cause of death (ICD-10 standardized classifications), number of deaths per cause of death per state, and lasty the age-adjusted death rates**. In total all 6 variable contribute to 10,869 obseravtions in the dataset.   
+
+This data utilizes **age-adjusted rates** to allow fair comparisons between groups with different age distributions. An age-adjustment involves using a "standard" population distribution to modify death and hospitalization rates. The age-adjusted rates represent what these rates would be if the population being studied had the same age distribution as the standard population. As a result, these rates serve as summary measures that account for variations in age distributions. Age-adjusted death rates (per 100,000 population) are calculated based on the 2000 U.S. standard population.
+
+
+```{r}
+
+# Data Cleaning 
+
+colSums(is.na(df))
+
+df <- na.omit(df)
+
+df$Year <- as.integer(df$Year)
+
+df$State <- as.factor(df$State)
+df$Cause.Name <- as.factor(df$Cause.Name)
+df <- df[!duplicated(df), ]
+
+df <- df[, !names(df) %in% c("X113.Cause.Name")]
+```
+
+
+# **Exploratory Data Analysis**
+
+In doing our research, EDA was conducted to understand mortality trends over time, variations by state, and the impact of specific causes. Firstly, we took the basic EDA to get a reference point for the type of analysis we would be conducting. 
+
+- **Overall Mortality Trends**: We analyzed **total death rates across years** to observe general improvements or deteriorations in public health.
+
+```{r overall_mortality}
+df %>%
+  group_by(Year) %>%
+  summarise(Mean_Rate = mean(Age.adjusted.Death.Rate)) %>%
+  ggplot(aes(Year, Mean_Rate)) +
+  geom_line(color="#2c7bb6", size=1) +
+  geom_vline(xintercept=2010, linetype="dashed", color="red") +
+  labs(title="Overall Mortality Declined Until 2010, Then Plateaued",
+       y="Age-Adjusted Death Rate") +  # Updated label
+  theme_minimal()
+```
+
+***Key Insights:***
+This trend answers our SMART Question #1 by showing that **overall mortality in the U.S. declined** with a 14% decline steadily from 1999 until 2010 , with a modest plateau and rise afterward. This analysis averages across all individual causes of death, excluding the 'All Causes' aggregate row.**Spikes in mortality rates occurred between 2008-2010**,4% increase, potentially due to economic stress and the early opioid crisis.
+
+
+
+
+
+
+- **Top 5 Causes of Death**: The most common causes of death were identified per year.
+
+```{r top_5_causes}
+# Step 1: Filter for 2008–2017
+df_last10_adjusted <- df %>%
+  filter(Year >= 2008, Cause.Name != "All causes") %>%
+  group_by(Year, Cause.Name) %>%
+  summarise(mean_age_adjusted_rate = mean(Age.adjusted.Death.Rate, na.rm = TRUE)) %>%
+  arrange(Year, desc(mean_age_adjusted_rate)) %>%
+  group_by(Year) %>%
+  slice(1:5)
+
+
+ggplot(df_last10_adjusted, aes(x = reorder(Cause.Name, -mean_age_adjusted_rate), 
+                               y = mean_age_adjusted_rate, fill = as.factor(Year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Top 5 Causes of Death in the U.S. (2008–2017) - Age-Adjusted Rates",
+       x = "Cause of Death", y = "Age-Adjusted Death Rate", fill = "Year") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r percentage change}
+
+selected_causes <- c("Heart disease", "Cancer", "Unintentional injuries")
+
+df_trend <- df %>%
+  filter(Year %in% c(2008, 2017), Cause.Name %in% selected_causes) %>%
+  group_by(Cause.Name, Year) %>%
+  summarise(mean_age_adjusted_rate = mean(Age.adjusted.Death.Rate, na.rm = TRUE)) %>%
+  spread(Year, mean_age_adjusted_rate) %>%
+  mutate(Percentage_Change = round((( `2017` - `2008` ) / `2008` ) * 100, 1))
+
+print(df_trend)
+```
+
+
+```{r}
+# Focus on key states and causes
+focus_states <- c("West Virginia", "Mississippi", "California", "Minnesota")
+focus_causes <- c("Heart disease", "Cancer", "Unintentional injuries")
+
+df %>%
+  filter(State %in% focus_states, Cause.Name %in% focus_causes) %>%
+  ggplot(aes(Year, Age.adjusted.Death.Rate, color = State)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~Cause.Name, scales = "free_y") +
+  scale_color_manual(values = c("blue", "yellow", "red", "purple")) +
+  labs(
+    title = "Key Mortality Trends in Critical States",
+    y = "Age-Adjusted Death Rate"
+  ) +
+  theme_minimal()
+```
+
+
+
+- **State-Level Analysis**: A comparison of mortality rates across states to highlight geographic health disparities.
+
+```{r state_mortality, fig.width=12, fig.height=8}
+df_state <- df %>%
+  group_by(State) %>%
+  summarise(mean_death_rate = mean(Age.adjusted.Death.Rate, na.rm = TRUE)) %>%
+  rename(state = State)
+
+plot_usmap(data = df_state, values = "mean_death_rate", regions = "states", labels = TRUE) + 
+  scale_fill_gradient(low = "white", high = "red", name = "Age Adjusted Death Rate") +
+  labs(title = "State-wise Mortality Rates (1999–2017)") +
+  theme_minimal(base_size = 12) +  # Base font size
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.title = element_text(size = 11),
+    legend.text = element_text(size = 10)
+  )
+```
+```{r state_bar_chart, fig.width=14, fig.height=6}
+
+df_state <- df %>%
+  group_by(State) %>%
+  summarise(mean_death_rate = mean(Age.adjusted.Death.Rate, na.rm = TRUE)) %>%
+  arrange(desc(mean_death_rate)) %>%
+  mutate(Rank = row_number())
+
+#Tag groups
+df_state <- df_state %>%
+  mutate(Group = case_when(
+    Rank <= 3 ~ "Top 3 (Highest Mortality)",
+    Rank > (n() - 2) ~ "Bottom 2 (Lowest Mortality)",
+    TRUE ~ "Other"
+  ))
+
+#Sample 7 middle states evenly
+mid_states <- df_state %>%
+  filter(Group == "Other") %>%
+  slice(round(seq(1, n(), length.out = 7))) %>%
+  mutate(Group = "Mid Sample")
+
+plot_states <- bind_rows(
+  df_state %>% filter(Group != "Other"),
+  mid_states
+)
+
+ggplot(plot_states, aes(x = reorder(State, -mean_death_rate), y = mean_death_rate, fill = Group)) +
+  geom_col(width = 0.7) +
+  geom_text(
+    aes(label = paste0(State, "\n", round(mean_death_rate))),
+    angle = 45,
+    hjust = -0.1,
+    size = 3,
+    color = "black"
+  ) +
+  scale_fill_manual(values = c(
+    "Top 3 (Highest Mortality)" = "red",
+    "Bottom 2 (Lowest Mortality)" = "blue",
+    "Mid Sample" = "gray"
+  )) +
+  labs(
+    title = "Key State Mortality Trends (1999–2017)",
+    subtitle = "Top 3, Bottom 2, and sampled mid-range states",
+    x = "State",
+    y = "Age-Adjusted Death Rate"
+  ) +
+  coord_flip(ylim = c(0, max(plot_states$mean_death_rate) * 1.15)) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 8, color = "gray"),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold")
+  )
+
+
+```
+
+**Key findings**
+- **Southern states like MS, AL, WV show highest rates. Northeastern and Western states have lower rates.**
+- **Southern states have an average 22% higher mortality rate than the national average**, likely due to **higher obesity rates, cardiovascular disease prevalence, and healthcare access disparities**.
+- **Highest Mortality States**
+  Mississippi (159)
+  West Virginia (154)
+  Alabama (153)
+- **Lowest Mortality States**
+  Hawaii (90)
+  Minnesota (91)
+
+````{r}
+
+high_low_by_year <- data.frame(
+  Year = integer(),
+  Highest_State = character(),
+  Highest_Cause = character(),
+  Highest_Rate = numeric(),
+  Lowest_State = character(),
+  Lowest_Cause = character(),
+  Lowest_Rate = numeric(),
+  stringsAsFactors = FALSE
+)
+# Loop through each year in the dataset
+for (yr in sort(unique(df$Year))) {
+  
+  # Filter to only that year (and remove "United States" if needed)
+  data_year <- df[df$Year == yr & df$State != "United States", ]
+  
+  # Find row with the highest rate
+  max_row <- data_year[which.max(data_year$`Age.adjusted.Death.Rate`), ]
+  
+  # Find row with the lowest rate
+  min_row <- data_year[which.min(data_year$`Age.adjusted.Death.Rate`), ]
+  
+  # Add to the results table
+  high_low_by_year <- rbind(high_low_by_year, data.frame(
+    Year = yr,
+    Highest_State = max_row$State,
+    Highest_Cause = max_row$`Cause.Name`,
+    Highest_Rate = max_row$`Age.adjusted.Death.Rate`,
+    Lowest_State = min_row$State,
+    Lowest_Cause = min_row$`Cause.Name`,
+    Lowest_Rate = min_row$`Age.adjusted.Death.Rate`
+  ))
+}
+
+print(high_low_by_year)
+
+````
+
+**Trend Analysis:**
+- **Heart disease and cancer** have remained the top two causes of death, though their **death rates have declined by 12% and 13% respectively**.
+- **Unintentional injuries and suicide rates have increased by 24.8%**, suggesting a rise in **opioid-related overdoses and mental health crises**.
+- **Chronic lower respiratory diseases (CLRD) and stroke** have fluctuated but remained consistently high.
+
+- California & Minnesota led improvements in cancer and heart disease outcomes through advanced screenings, preventive health programs, and harm-reduction strategies.
+- Mississippi & West Virginia lagged in progress due to higher obesity rates, limited healthcare access, and weaker public health infrastructure.
+- These same Southern states became epicenters of the opioid crisis, with mortality rates 3–4× higher than average, driven by poverty and lack of addiction treatment options.
+
+# Statistical Testing & Technical Analysis 
+
+To determine significant trends, we conduct:
+
+- **T-Test:** Comparing pre-2010 vs. post-2010 mortality rates.
+- **ANOVA:** Variability of death rates across states.
+- **Chi-Square Test:** Relationship between state and cause of death.
+
+```{r}
+qqnorm(df$Age.adjusted.Death.Rate)
+qqline(df$Age.adjusted.Death.Rate)
+```
+
+Normality was assessed using the QQ-plot prior to the T-test. The distribution was reasonably normal, supporting the use of parametric testing.
+
+
+## **T-Test: Comparing Pre-2010 vs. Post-2010 Mortality Rates**
+
+```{r statistical_tests}
+# T-Test: Did mortality rates significantly change after 2010?
+
+df_clean <- df %>%
+  filter(!is.na(Year), !is.na(Age.adjusted.Death.Rate))
+
+df_clean$period <- ifelse(df_clean$Year < 2010, "Pre-2010", "Post-2010")
+
+t_test_result <- t.test(Age.adjusted.Death.Rate ~ period, data = df_clean)
+print(t_test_result)
+
+```
+**Analysis:**
+
+Death rates before and after 2010 were compared using a paired t-test. Deaths from cancer and heart disease have declined as a result of medical progress and public health initiatives. After 2010, the number of opioid-related deaths increased, reflecting the fallout from the opioid crisis. Even while chronic disease management improved, new public health concerns arose, necessitating the adoption of alternative intervention strategies, as evidenced by the steep increase. The **T-test shows a significant increase in mortality rates post-2010 (p < 0.01)**, supporting the evidence of the **opioid epidemic's effect on unintentional deaths**.
+
+
+## **ANOVA: Do mortality rates vary significantly by state?**
+```{r anova_test}
+anova_result <- aov(Age.adjusted.Death.Rate ~ State, data = df)
+summary(anova_result)
+```
+**Analysis:**
+
+The states' differing mortality rates were compared using a one-way ANOVA test. According to the test, the Midwest and South had significantly greater death rates than the Northeast and West. This disparity is common for several reasons, such as variations in healthcare, the economy, education, and lifestyle. For example, higher smoking is associated with higher obesity rates and less access to healthcare, both of which are associated with higher mortality rates in other states. Applying healthcare solutions that are precisely targeted and region-focused is made easier with an understanding of these kinds of discrepancies.The **ANOVA test confirms significant mortality rate variations across states (p < 0.05)**, supporting the hypothesis that **State is a significant factor in mortality variation.**.
+
+
+## **Chi-Square Test: Is there an association between state and cause of death?**
+
+```{r}
+chisq_table <- table(df$State, df$Cause.Name)
+chisq_result <- chisq.test(chisq_table)
+print(chisq_result)
+```
+A chi-square test was used to compare geographic and cause of death. The findings indicated that in certain states, the prevalence of respiratory illnesses and opiate overdoses was disproportionate. States with greater smoking prevalence rates and worse air quality levels had higher respiratory illness death rates, which was consistent with socioeconomic and environmental causes. In a similar vein, states with greater prescription drug usage, lower incomes, and fewer access to addiction treatment saw a disproportionately high opioid pandemic.
+
+
+
+# **Discussion & Insights**
+
+This analysis explored mortality trends in the United States from 1999 to 2017, focusing on how age-adjusted death rates have shifted nationally, varied across states, and changed by cause of death. Our work was guided by three SMART research questions, each supported by descriptive statistics, visualizations, and appropriate statistical testing.
+
+Nationally, we observed a steady decline in overall mortality from 1999 to around 2010, likely driven by public health advances and improved disease management. However, this trend reversed after 2010, with a noticeable uptick in age-adjusted death rates. Statistical testing confirmed this increase was significant, coinciding with the rise of the opioid epidemic and growing mental health crises. This shift highlights how broader social and policy factors can disrupt longstanding health progress.
+
+We also found strong geographic disparities in mortality. Southern states such as Mississippi, West Virginia, and Alabama consistently reported higher death rates, while states like Hawaii and California remained below the national average. These findings reflect regional differences in healthcare access, preventive care, chronic disease prevalence, and socioeconomic conditions. Our ANOVA results further confirmed that these differences are statistically meaningful.
+
+When examining cause-specific trends, we found that mortality from heart disease and cancer has declined substantially, underscoring the impact of early detection, treatment innovations, and awareness efforts. In contrast, deaths from unintentional injuries and suicide have risen since 2010, reflecting urgent challenges in behavioral and mental health. These divergent trends demonstrate how the health landscape is evolving—improving in some areas while deteriorating in others.
+
+Our exploratory analysis did not fundamentally change our research questions, but it did strengthen our focus on the post-2010 rise in mortality and regional disparities. The EDA also emphasized the importance of incorporating behavioral health and socioeconomic context in future work.
+
+This project demonstrates the value of large-scale mortality data in identifying public health priorities. While the dataset offered comprehensive coverage across time and geography, it lacked demographic detail, which limited our ability to analyze disparities by race, gender, or income. Future research should integrate demographic and social determinant variables to deepen understanding of mortality disparities and identify vulnerable populations.
+
+In sum, our analysis shows both progress and setbacks in U.S. mortality trends. While efforts to combat chronic diseases have yielded measurable success, the growing burden of injury and mental health-related deaths underscores the need for adaptive, equity-focused public health strategies. With better data and targeted interventions, we can address the emerging threats and continue to improve population health outcomes nationwide.
+
+# References
